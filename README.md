@@ -23,21 +23,19 @@ Go-Lighthouse 是一个轻量级、高性能的任务调度平台，核心特性
 
 ## 技术栈
 
-| 层级 | 技术                                               |
-| ---- | -------------------------------------------------- |
-| 后端 | Go 1.23、Gin、GORM、MySQL 8.0、WebSocket           |
-| 前端 | React 18、Vite、Ant Design、Tailwind CSS、Recharts |
-| 部署 | Docker、Docker Compose、Nginx                      |
+| 层级 | 技术                                                        |
+| ---- | ----------------------------------------------------------- |
+| 后端 | Go 1.23、Gin、GORM、MySQL 8.0、WebSocket                    |
+| 前端 | Node.js、React 18、Vite、Ant Design、Tailwind CSS、Recharts |
+| 部署 | Docker、Nginx                                               |
 
 ---
 
-## 快速开始（一键部署）
+## 快速开始
 
 ### 环境要求
 
 - Docker 20.10+
-- Docker Compose 2.0+
-- （可选）Git
 
 ### 1. 克隆项目
 
@@ -46,40 +44,96 @@ git clone https://github.com/your-org/go-lighthouse.git
 cd go-lighthouse
 ```
 
-### 2. 一键启动
+### 2. 生产环境部署（Docker）
 
-**Linux / macOS：**
+#### 环境准备
 
-```bash
-./deploy.sh
-```
+##### 以下未声明“本地”操作，均为云服务器配置
 
-**Windows（PowerShell）：**
-
-```powershell
-.\deploy.ps1
-```
-
-启动完成后访问：
-
-- **Web 界面**：http://localhost
-- **后端 API**：http://localhost:8080
-- **健康检查**：http://localhost:8080/api/v1/base/health
-
-### 3. 常用命令
+**器安装 Docker（CentOS）**
 
 ```bash
-# 查看实时日志
-docker-compose logs -f
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo systemctl status docker
+```
 
-# 停止服务
-docker-compose down
+**创建 Docker 网络**
 
-# 停止并清除数据卷
-docker-compose down -v
+```bash
+docker network create go-lighthouse-net
+```
 
-# 重启指定服务
-docker-compose restart backend
+#### 部署 MySQL
+
+```bash
+sudo docker run -d \
+  --name go-lighthouse-mysql \
+  --network go-lighthouse-net \
+  -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD="MyStrongPassword123!" \
+  -e MYSQL_DATABASE=go_lighthouse \
+  -e MYSQL_CHARSET=utf8mb4 \
+  -e MYSQL_COLLATION=utf8mb4_unicode_ci \
+  -v mysql_data:/var/lib/mysql \
+  --restart unless-stopped \
+  mysql:8.0
+```
+
+**本地后端编译（Linux AMD64）**
+
+```bash
+cd go-lighthouse
+
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o go-lighthouse （构建后端执行文件）
+```
+
+#### 部署后端服务
+
+```bash
+sudo docker run -d \
+  --name go-lighthouse-backend \
+  --network go-lighthouse-net \
+  -p 8080:8080 \
+  -e SERVER_PORT=8080 \
+  -e DB_HOST=go-lighthouse-mysql \
+  -e DB_PORT=3306 \
+  -e DB_USER=root \
+  -e DB_PASSWORD="MyStrongPassword123" \
+  -e DB_NAME=go_lighthouse \
+  -e TZ=Asia/Shanghai \
+  -v /app/go-lighthouse/go-lighthouse:/app/go-lighthouse \ （映射前端打包文件）
+  --restart unless-stopped \
+  go-lighthouse-backend:latest
+```
+
+> 注意：请确保 `DB_PASSWORD` 与 MySQL 容器设置的 `MYSQL_ROOT_PASSWORD` 保持一致。
+
+#### 本地构建前端代码
+
+```bash
+cd lighthouse-web
+
+npm install
+
+npm build
+```
+
+#### 部署前端（Nginx）
+
+```bash
+sudo docker run -d \
+  --name go-lighthouse-frontend \
+  --network go-lighthouse-net \
+  -p 80:80 \
+  -p 443:443 \
+  -v /app/go-lighthouse/dist:/usr/share/nginx/html:ro \ （映射前端构建文件）
+  -v /app/go-lighthouse/nginx.conf:/etc/nginx/conf.d/default.conf:ro \ （映射naginx配置文件）
+  -v /app/certs:/app:ro \
+  go-lighthouse-nginx:latest
 ```
 
 ---
@@ -99,7 +153,7 @@ docker-compose restart backend
 
 ## 配置说明
 
-后端通过环境变量读取配置，可在 `docker-compose.yml` 中修改：
+后端通过环境变量读取配置
 
 | 环境变量      | 默认值          | 说明           |
 | ------------- | --------------- | -------------- |
@@ -166,34 +220,26 @@ docker-compose restart backend
 
 ---
 
-## 目录结构
+## 联系作者
 
-```
-go-lighthouse/
-├── go-lighthouse/          # 后端源码（Go）
-│   ├── main.go
-│   ├── config/             # 配置读取
-│   ├── controller/         # HTTP 控制器
-│   ├── core/               # 任务队列核心
-│   ├── db/                 # 数据库初始化
-│   ├── middleware/         # Gin 中间件
-│   ├── model/              # GORM 模型
-│   ├── router/             # 路由注册
-│   ├── service/            # 业务逻辑
-│   ├── websocket/          # WebSocket Hub
-│   └── Dockerfile          # 后端镜像构建
-├── lighthouse-web/         # 前端源码（React + Vite）
-│   ├── src/
-│   ├── Dockerfile          # 前端镜像构建
-│   └── nginx.conf          # 前端 Nginx 配置
-├── nginx/
-│   └── nginx.conf          # 反向代理配置
-├── docker-compose.yml      # 编排文件
-├── deploy.sh               # Linux/macOS 一键部署
-├── deploy.ps1              # Windows 一键部署
-├── README.md               # 项目说明
-└── DEPLOYMENT.md           # 详细部署文档
-```
+如果觉得这个项目对你有帮助，欢迎加微信交流，或者请作者喝一杯咖啡 ☕
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="./assets/wechat-card.png" width="200" alt="微信名片" />
+        <br />
+        <sub>微信扫码，交个朋友</sub>
+      </td>
+      <td align="center">
+        <img src="./assets/buy-me-a-coffee.png" width="200" alt="收款码" />
+        <br />
+        <sub>请作者喝杯咖啡 ☕</sub>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ---
 
