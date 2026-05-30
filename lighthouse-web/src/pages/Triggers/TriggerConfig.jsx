@@ -556,7 +556,7 @@ function TriggerConfig({ initialHookId = "" }) {
                   </div>
                   <div className="flex-1">
                     <label className="block text-xs text-slate-600 mb-1">
-                      密码
+                      申请码
                     </label>
                     <input
                       type="password"
