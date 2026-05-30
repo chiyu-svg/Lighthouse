@@ -1,0 +1,13 @@
+/* Tailwind CSS 基础层引入 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局样式：侧边栏内部滚动条 */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
